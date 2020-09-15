@@ -1,4 +1,7 @@
 # A Test Driven Modular Application Framework - by Monty Dimkpa
+#
+# building blocks: unit_tests, test modules, test_driven functions, pipelines, workflows & context switches
+#
 # Version: 0.5
 
 import datetime
@@ -92,14 +95,14 @@ class Pipeline:
         if no_errors:
             self.output = curr_package
             self.executed = True
-            print("Pipeline executed without errors. Duration: {} secs.".format(elapsed_secs(self.started)))
+            print("Pipeline executed successfully (check trace for function-specific errors). Duration: {} secs.".format(elapsed_secs(self.started)))
         else:
             print("Pipeline failed at step {} of {} [function: {}]. Duration: {} secs.".format(index, len(self.process), function, elapsed_secs(self.started)))
 
 
 class Workflow:
     '''
-    Sequential pipeline execution model. Also supports workflow piping
+    Sequential pipeline execution model. Also supports workflow piping.
     '''
     def __init__(self, pipelines):
         self.pipelines = pipelines
@@ -130,6 +133,23 @@ class Workflow:
         else:
             pass
 
+def context_switch(conditionals, default):
+    '''
+    A context switch will constrain flow routing to a function, pipeline or workflow
+    depending on the first boolean expression text in the "conditionals" array (of tuples) to evaluate to True.
+    If none evaluate, the default object is assigned.
+    '''
+    selected = None
+    for conditional in conditionals:
+        expression, object_name = conditional
+        if eval(expression):
+            selected = object_name
+            break
+    if selected:
+        return selected
+    else:
+        return default
+
 def sample_function(package):
     '''
     A test-driven function example
@@ -141,9 +161,13 @@ def sample_function(package):
     ], package, func_name)
     test_module.run_tests()
     if test_module.approved:
-        # function code goes here
+        try:
+            # function code goes here
+            pass
+        except Exception as error:
+            print("error at function: {} --> {}".format(func_name, str(error)))
         output = None
-        return [output]
+        return [output] # output must always be an array
     else:
         return None
 
@@ -154,15 +178,24 @@ sample_pipeline = Pipeline([
     "sample_function"
 ])
 
+# A sample pipeline with context switching
+sample_pipeline_with_context_switching = Pipeline([
+    ("sample_function", []),
+    context_switch([
+        ("1 < 0", "sample_function1") # write boolean expressions inside string
+    ], "sample_function")
+])
+
 # Pipeline chaining example
 sample_pipeline_chaining = Pipeline([
-    ("sample_function", "sample_pipeline"),
+    ("sample_function", "sample_pipeline_with_context_switching"),
 ])
 
 # A workflow example
 sample_workflow = Workflow([
     "sample_pipeline",
-    "sample_pipeline_chaining"
+    "sample_pipeline_chaining",
+    "sample_pipeline_with_context_switching"
 ])
 
 # Workflow chaining example
