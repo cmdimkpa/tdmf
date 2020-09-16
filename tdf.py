@@ -187,12 +187,12 @@ def sample_function(package):
     ], package, func_name)
     test_module.run_tests()
     if test_module.approved:
+        output = None
         try:
             # function code goes here
             pass
         except Exception as error:
             print("error at function: {} --> {}".format(func_name, str(error)))
-        output = None
         return [output] # output must always be an array
     else:
         return None
