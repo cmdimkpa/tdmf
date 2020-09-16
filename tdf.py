@@ -1,10 +1,32 @@
 # A Test Driven Modular Application Framework - by Monty Dimkpa
 #
-# building blocks: unit_tests, test modules, test_driven atomic functions, pipelines, workflows & context switches
+# building blocks: unit_tests, test modules, test_driven atomic functions, pipelines,
+# workflows, context switches and flags (global mutable state) based routing
 #
 # Version: 0.5
 
 import datetime
+
+global flags
+
+class MutableState:
+    '''
+        Mutable state for message-passing between functions, pipelines
+        and workflows.
+    '''
+    def __init__(self):
+        self.state = {}
+    def get(self, key):
+        if key in self.state:
+            return self.state[key]
+        else:
+            return None
+    def set(self, key, value):
+        if key and value:
+            self.state[key] = value
+        return key, value
+
+flags = MutableState()
 
 def now():
     # get the current time
@@ -138,13 +160,13 @@ class Workflow:
 def context_switch(conditionals, default):
     '''
         A context switch will constrain flow routing to a function, pipeline or workflow
-        depending on the first boolean expression text in the "conditionals" array (of tuples) to evaluate to True.
-        If none evaluate, the default object is assigned.
+        depending on the first flag boolean in the "conditionals" array (of tuples) to evaluate to True.
+        If no flag booleans evaluate to True, the default object is assigned.
     '''
     selected = None
     for conditional in conditionals:
-        expression, object_name = conditional
-        if eval(expression):
+        flag_boolean, object_name = conditional
+        if flag_boolean:
             selected = object_name
             break
     if selected:
@@ -153,12 +175,14 @@ def context_switch(conditionals, default):
         return default
 
 def sample_function(package):
+    global flags
     '''
-        A test-driven atomic function example
+        A test-driven atomic function example. Supports message-passing between functions
+        via the flags interface (global mutable state)
     '''
     func_name = "sample_function"
     test_module = TestModule([
-    # list applicable tests - drop 'ut_' prefix
+    # list applicable tests - drop 'ut_' prefix - e.g. "string_only", "real_only"
 
     ], package, func_name)
     test_module.run_tests()
@@ -180,11 +204,11 @@ sample_pipeline = Pipeline([
     "sample_function"
 ])
 
-# A sample pipeline with context switching
+# A sample pipeline with context switching and flags
 sample_pipeline_with_context_switching = Pipeline([
     ("sample_function", []),
     context_switch([
-        ("1 < 0", "sample_function1") # write boolean expressions inside string
+        (flags.get('sample_function_executed'), "sample_function1") # flag-based routing
     ], "sample_function")
 ])
 
