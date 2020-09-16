@@ -1,6 +1,6 @@
 # A Test Driven Modular Application Framework - by Monty Dimkpa
 #
-# building blocks: unit_tests, test modules, test_driven functions, pipelines, workflows & context switches
+# building blocks: unit_tests, test modules, test_driven atomic functions, pipelines, workflows & context switches
 #
 # Version: 0.5
 
@@ -27,7 +27,9 @@ def ut_real_only(package):
     return sum([bool(isinstance(item, int) or isinstance(item, float)) for item in package]) == len(package)
 
 class TestModule:
-    # run required tests inside functions
+    '''
+        Allows you to run required tests inside your functions
+    '''
     def __init__(self, required_tests, package, func_name):
         self.func_name = func_name
         self.required_tests = required_tests
@@ -64,8 +66,8 @@ class TestModule:
 
 class Pipeline:
     '''
-    Group related functions sequentially by piping the output of a preceding function
-    to the input of the current function
+        Group related functions sequentially by piping the output of a preceding function
+        to the input of the current function
     '''
     def __init__(self, process):
         self.process = process
@@ -102,7 +104,7 @@ class Pipeline:
 
 class Workflow:
     '''
-    Sequential pipeline execution model. Also supports workflow piping.
+        Sequential pipeline execution model. Also supports workflow piping.
     '''
     def __init__(self, pipelines):
         self.pipelines = pipelines
@@ -135,9 +137,9 @@ class Workflow:
 
 def context_switch(conditionals, default):
     '''
-    A context switch will constrain flow routing to a function, pipeline or workflow
-    depending on the first boolean expression text in the "conditionals" array (of tuples) to evaluate to True.
-    If none evaluate, the default object is assigned.
+        A context switch will constrain flow routing to a function, pipeline or workflow
+        depending on the first boolean expression text in the "conditionals" array (of tuples) to evaluate to True.
+        If none evaluate, the default object is assigned.
     '''
     selected = None
     for conditional in conditionals:
@@ -152,7 +154,7 @@ def context_switch(conditionals, default):
 
 def sample_function(package):
     '''
-    A test-driven function example
+        A test-driven atomic function example
     '''
     func_name = "sample_function"
     test_module = TestModule([
