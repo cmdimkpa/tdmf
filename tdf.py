@@ -236,5 +236,5 @@ sample_complex_workflow = Workflow([
 ])
 
 # running a complex workflow
-sample_complex_workflow.run()
-print(sample_complex_workflow.output)
+#sample_complex_workflow.run()
+#print(sample_complex_workflow.output)
