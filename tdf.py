@@ -187,7 +187,7 @@ def sample_function(package):
     ], package, func_name)
     test_module.run_tests()
     if test_module.approved:
-        output = [None]
+        output = []
         try:
             # function code goes here
             pass
