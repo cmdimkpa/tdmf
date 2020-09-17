@@ -7,7 +7,7 @@
 
 import datetime
 
-global flags
+global flags, testEngine
 
 class MutableState:
     '''
@@ -16,13 +16,15 @@ class MutableState:
     '''
     def __init__(self):
         self.state = {}
+
     def get(self, key):
         if key in self.state:
             return self.state[key]
         else:
             return None
+
     def set(self, key, value):
-        if key and value:
+        if key:
             self.state[key] = value
         return key, value
 
@@ -36,57 +38,171 @@ def elapsed_secs(t):
     # get the total seconds elapsed since time t
     return (now() - t).total_seconds()
 
-def ut_string_only(package):
-    # unit test: check only string items in package
+def pt_string_only(package):
+    # package test: check only string items in package
     return sum([isinstance(item, str) for item in package]) == len(package)
 
-def ut_int_only(package):
-    # unit test: check only integer items in package
+def pt_int_only(package):
+    # package test: check only integer items in package
     return sum([isinstance(item, int) for item in package]) == len(package)
 
-def ut_real_only(package):
-    # unit test: check only real items in package
+def pt_real_only(package):
+    # package test: check only real items in package
     return sum([bool(isinstance(item, int) or isinstance(item, float)) for item in package]) == len(package)
 
-class TestModule:
+def pt_dict_only(package):
+    # package test: check only real items in package
+    return sum([bool(isinstance(item, dict) or isinstance(item, float)) for item in package]) == len(package)
+
+class TestRegister:
     '''
-        Allows you to run required tests inside your functions
+        Allows you to register and de-register tests for functions
     '''
-    def __init__(self, required_tests, package, func_name):
-        self.func_name = func_name
-        self.required_tests = required_tests
-        self.package = package
-        self.approved = False
-        self.passed = []
-        self.failed = []
-        self.not_found = []
-        self.started = None
-    def report(self):
+    def __init__(self):
+        self.register = {}
+        self.last_register_status = -1
+
+    def add_test(self, test_category, function, test_name, test_package=None, test_output=None):
+        if test_category in ["package", "unit"]:
+            obj = test_name
+            if test_package:
+                obj = (test_name, test_package, test_output)
+            if function in self.register:
+                if test_category in self.register[function]:
+                    if test_name not in self.register[function][test_category]:
+                        self.register[function][test_category].append(obj)
+                else:
+                    self.register[function][test_category] = [obj]
+            else:
+                self.register[function] = {}
+                self.register[function][test_category] = [obj]
+            self.last_register_status = 1
+        else:
+            self.last_register_status = 0
+
+    def remove_test(self, test_category, function, test_name):
+        self.last_register_status = 0
+        if function in self.register:
+            if test_category in self.register[function]:
+                found = [self.register[function][test_category].index(x) for x in self.register[function][test_category] if test_name in x]
+                if found:
+                    index = found[0]
+                    self.register[function][test_category].pop(index)
+                    self.last_register_status = 1
+
+    def lookup_tests(self, function):
+        if function in self.register:
+            return self.register[function]
+        else:
+            return { "package" : [], "unit" : [] }
+
+class TestModule(TestRegister):
+    '''
+        Allows you to run registered function tests inside your pipelines
+    '''
+    def __init__(self):
+        super().__init__()
+        self.test_status = {}
+        self.last_test_output = None
+
+    def report(self, function):
         template = '''
         function: {}
+
+        ---- PACKAGE TESTS ----
+
         PASSED: {} tests
         FAILED: {} tests: {}
         NOT_FOUND: {} tests: {}
         duration: {} secs.
+
+        ---- UNIT TESTS ----
+
+        PASSED: {} tests
+        FAILED: {} tests: {}
+        NOT_FOUND: {} tests: {}
+        duration: {} secs.
+
         '''
-        print(template.format(self.func_name, len(self.passed), len(self.failed), self.failed, len(self.not_found), self.not_found, elapsed_secs(self.started)))
-    def run_tests(self):
-        self.started = now()
-        for test in self.required_tests:
-            test = "ut_{}".format(test)
+        print(template.format(
+                function, len(self.test_status[function]["package"]["passed"]), \
+                len(self.test_status[function]["package"]["failed"]), self.test_status[function]["package"]["failed"],\
+                len(self.test_status[function]["package"]["not_found"]), self.test_status[function]["package"]["not_found"],\
+                self.test_status[function]["package"]["runtime"],\
+                len(self.test_status[function]["unit"]["passed"]), \
+                len(self.test_status[function]["unit"]["failed"]), self.test_status[function]["unit"]["failed"],\
+                len(self.test_status[function]["unit"]["not_found"]), self.test_status[function]["unit"]["not_found"],\
+                self.test_status[function]["unit"]["runtime"]
+            )
+        )
+
+    def run_tests(self, function, package):
+        self.test_status[function] = {
+            "package" : {
+                "passed" : [],
+                "failed" : [],
+                "not_found" : [],
+                "runtime" : 0
+            },
+            "unit" : {
+                "passed" : [],
+                "failed" : [],
+                "not_found" : [],
+                "runtime" : 0
+            },
+            "approved" : False
+        }
+        tests = self.lookup_tests(function)
+        try:
+            package_tests = tests["package"]
+        except:
+            package_tests = []
+        try:
+            unit_tests = tests["unit"]
+        except:
+            unit_tests = []
+
+        # run package tests
+        started = now()
+        for test in package_tests:
+            test = "pt_{}".format(test)
             if test in globals():
-                passed = globals()[test](self.package)
+                passed = globals()[test](package)
                 if passed:
-                    self.passed.append(test)
+                    self.test_status[function]["package"]["passed"].append(test)
                 else:
-                    self.failed.append(test)
+                    self.test_status[function]["package"]["failed"].append(test)
             else:
-                self.not_found.append(test)
-        if len(self.passed) + len(self.not_found) == len(self.required_tests):
-            self.approved = True
-        self.report()
+                self.test_status[function]["package"]["not_found"].append(test)
+        self.test_status[function]["package"]["runtime"] = elapsed_secs(started)
+
+        # run unit tests
+        started = now()
+        for test, test_package, test_output in unit_tests:
+            if function in globals():
+                try:
+                    if test_output == globals()[function](test_package):
+                        self.test_status[function]["unit"]["passed"].append(test)
+                        self.last_test_output = test_output
+                    else:
+                        self.test_status[function]["unit"]["failed"].append(test)
+                except:
+                    self.test_status[function]["unit"]["failed"].append(test)
+            else:
+                self.test_status[function]["unit"]["not_found"].append(test)
+        self.test_status[function]["unit"]["runtime"] = elapsed_secs(started)
+
+        # check test approval and report
+        total = self.test_status[function]["unit"]["passed"] + self.test_status[function]["package"]["passed"] + \
+        self.test_status[function]["unit"]["not_found"] + self.test_status[function]["package"]["not_found"]
+        if len(total) == len(package_tests + unit_tests):
+            self.test_status[function]["approved"] = True
+        self.report(function)
+
+testEngine = TestModule()
 
 class Pipeline:
+    global testEngine
     '''
         Group related functions sequentially by piping the output of a preceding function
         to the input of the current function
@@ -96,32 +212,62 @@ class Pipeline:
         self.executed = False
         self.started = None
         self.output = None
+        self.can_run = False
+    def build(self):
+        self.started = now()
+        try:
+            primer, curr_package = self.process[0]
+            try:
+                curr_package = globals()[curr_package].output
+            except:
+                pass
+            functions = [primer] + self.process[1:]
+            failed = False
+            last_function = None
+            for function in functions:
+                last_function = function
+                testEngine.run_tests(function, curr_package)
+                if testEngine.test_status[function]["approved"]:
+                    curr_package = testEngine.last_test_output
+                else:
+                    failed = True
+                    print("BuildError: pipeline build failed at function: {}. Duration: {} secs.".format(function, elapsed_secs(self.started)))
+                    break
+            if not failed:
+                self.can_run = True
+                self.run()
+        except:
+            print("BuildError: pipeline not properly constructed. Duration: {} secs.".format(elapsed_secs(self.started)))
     def run(self):
         self.started = now()
-        curr_package = None
-        function = None
-        no_errors = True
-        index = 0
-        for step in self.process:
-            index += 1
-            if index == 1:
-                function, curr_package = step
-                try:
-                    curr_package = globals()[curr_package].output
-                except:
-                    pass
+        if self.can_run:
+            curr_package = None
+            function = None
+            no_errors = True
+            index = 0
+            for step in self.process:
+                index += 1
+                if index == 1:
+                    function, curr_package = step
+                    try:
+                        curr_package = globals()[curr_package].output
+                    except:
+                        pass
+                else:
+                    function = step
+                curr_package = globals()[function](curr_package)
+                if not curr_package:
+                    no_errors = False
+                    break
+            if no_errors:
+                self.output = curr_package
+                self.executed = True
+                self.can_run = False
+                print("Pipeline executed successfully (check trace for function-specific errors). Duration: {} secs.".format(elapsed_secs(self.started)))
             else:
-                function = step
-            curr_package = globals()[function](curr_package)
-            if not curr_package:
-                no_errors = False
-                break
-        if no_errors:
-            self.output = curr_package
-            self.executed = True
-            print("Pipeline executed successfully (check trace for function-specific errors). Duration: {} secs.".format(elapsed_secs(self.started)))
+                print("Pipeline failed at step {} of {} [function: {}]. Duration: {} secs.".format(index, len(self.process), function, elapsed_secs(self.started)))
         else:
-            print("Pipeline failed at step {} of {} [function: {}]. Duration: {} secs.".format(index, len(self.process), function, elapsed_secs(self.started)))
+            print("RuntimeError: please build this pipeline first. Duration: {} secs.".format(elapsed_secs(self.started)))
 
 
 class Workflow:
@@ -133,6 +279,8 @@ class Workflow:
         self.output = None
         self.executed = False
         self.started = None
+    def build(self):
+        self.run()
     def run(self):
         if self.pipelines:
             self.started = now()
@@ -143,7 +291,7 @@ class Workflow:
             while n_executed < len(self.pipelines) and no_errors:
                 index += 1
                 curr_pipeline = globals()[self.pipelines[index]]
-                curr_pipeline.run()
+                curr_pipeline.build()
                 if curr_pipeline.executed:
                     n_executed += 1
                 else:
@@ -174,6 +322,19 @@ def context_switch(conditionals, default):
     else:
         return default
 
+# ----------------------------- WORKSPACE -----------------------------------
+
+# register applicable tests for your functions
+
+testEngine.add_test("package", "get_sum", "real_only")
+testEngine.add_test("unit", "get_sum", ("test1", [1,2,3], [6]))  # array in, array out
+testEngine.add_test("package", "times_two", "real_only")
+testEngine.add_test("unit", "times_two", ("test1", [1,2,3], [2,4,6]))  # array in, array out
+
+# Initialize application flags
+
+flags.set("times_two_output", [])
+
 def sample_function(package):
     global flags
     '''
@@ -181,60 +342,70 @@ def sample_function(package):
         via the flags interface (global mutable state)
     '''
     func_name = "sample_function"
-    test_module = TestModule([
-    # list applicable tests - drop 'ut_' prefix - e.g. "string_only", "real_only"
+    output = []
+    try:
+        # function code goes here
+        pass
+    except Exception as error:
+        print("error at function: {} --> {}".format(func_name, str(error)))
+    return output # [...] - output must always be an array
 
-    ], package, func_name)
-    test_module.run_tests()
-    if test_module.approved:
-        output = []
-        try:
-            # function code goes here
-            pass
-        except Exception as error:
-            print("error at function: {} --> {}".format(func_name, str(error)))
-        return output # [...] - output must always be an array
-    else:
-        return None
+def get_sum(package):
+    global flags
+    '''
+        get sum of numbers in package
+    '''
+    func_name = "get_sum"
+    output = []
+    try:
+        output = [sum(package)]
+    except Exception as error:
+        print("error at function: {} --> {}".format(func_name, str(error)))
+    return output # [...] - output must always be an array
 
+def times_two(package):
+    global flags
+    '''
+        get two times all the numbers in a package
+    '''
+    func_name = "times_two"
+    output = []
+    try:
+        output = [x for x in map(lambda x: x*2, package)]
+        # use flags to update state
+        times_two_output = flags.get("times_two_output")
+        if times_two_output:
+            times_two_output += output
+        else:
+            times_two_output = output
+        flags.set("times_two_output", times_two_output)
+    except Exception as error:
+        print("error at function: {} --> {}".format(func_name, str(error)))
+    return output # [...] - output must always be an array
 
 # A sample pipeline
 sample_pipeline = Pipeline([
-    ("sample_function", []),
-    "sample_function"
+    ("get_sum", [1,2.44,3]),
+    "times_two"
 ])
 
-# A sample pipeline with context switching and flags
-sample_pipeline_with_context_switching = Pipeline([
-    ("sample_function", []),
+# Pipeline chaining with context switching
+sample_pipeline2 = Pipeline([
+    ("get_sum", "sample_pipeline"),
     context_switch([
-        (flags.get('sample_function_executed'), "sample_function1") # flag-based routing
-    ], "sample_function")
+        (len(flags.get("times_two_output")) % 5 == 0, "get_sum"), # flag-based routing
+    ], "times_two")
 ])
 
-# Pipeline chaining example
-sample_pipeline_chaining = Pipeline([
-    ("sample_function", "sample_pipeline_with_context_switching"),
-])
-
-# A workflow example
+# Sample workflow
 sample_workflow = Workflow([
-    "sample_pipeline",
-    "sample_pipeline_chaining",
-    "sample_pipeline_with_context_switching"
+   "sample_pipeline",
+   "sample_pipeline2"
 ])
 
-# Workflow chaining example
-sample_workflow_chaining = Pipeline([
-    ("sample_function", "sample_workflow"),
-])
+# Workflow looping
+sample_workflow_loop = Workflow(["sample_workflow" for i in range(2)]) # loop workflow 10 times
 
-# complex workflow example
-sample_complex_workflow = Workflow([
-    "sample_workflow",
-    "sample_workflow_chaining"
-])
-
-# running a complex workflow
-#sample_complex_workflow.run()
-#print(sample_complex_workflow.output)
+#sample_workflow_loop.run()
+#print(sample_workflow_loop.output)
+#print(flags.get("times_two_output"))
