@@ -1,6 +1,6 @@
 # A Test Driven Modular Application Framework - by Monty Dimkpa
 #
-# building blocks: unit_tests, test modules, test_driven atomic functions, pipelines,
+# building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
 # workflows, context switches and flags (global mutable state) based routing
 #
 # Version: 0.5
@@ -213,6 +213,7 @@ class Pipeline:
         self.output = None
         self.can_run = False
     def build(self):
+        global testEngine
         self.started = now()
         try:
             primer, curr_package = self.process[0]
@@ -224,6 +225,7 @@ class Pipeline:
             failed = False
             for function in functions:
                 testEngine.run_tests(function, curr_package)
+                print(testEngine.test_status)
                 if testEngine.test_status[function]["approved"]:
                     curr_package = testEngine.last_test_output
                 else:
