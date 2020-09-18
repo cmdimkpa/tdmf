@@ -236,7 +236,8 @@ class Pipeline:
             if not failed:
                 self.can_run = True
                 self.run()
-        except:
+        except Exception as e:
+            print(str(e))
             print("BuildError: pipeline not properly constructed. Duration: {} secs.".format(elapsed_secs(self.started)))
     def run(self):
         self.started = now()
