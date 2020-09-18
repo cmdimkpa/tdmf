@@ -8,7 +8,7 @@ setup(
   author = 'Monty Dimkpa',
   author_email = 'cmdimkpa@gmail.com',
   url = 'https://github.com/cmdimkpa/tdmf',
-  download_url = 'https://github.com/cmdimkpa/tdmf/archive/v_05_01.tar.gz',
+  download_url = 'https://github.com/cmdimkpa/tdmf/archive/v_05_02.tar.gz',
   keywords = ['unit tests', 'package tests', 'atomic functions', 'pipelines', 'workflows', 'mutable state'],
   install_requires=[            
           
