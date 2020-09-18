@@ -7,6 +7,7 @@ Represent any complex application workflow (flowchart) as Python code.
 
 <ul>
   <li>unit_tests</li>
+   <li>package_tests</li>
   <li>test modules</li>
   <li>test_driven atomic functions</li>
   <li>pipelines</li>
