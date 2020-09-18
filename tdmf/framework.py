@@ -51,8 +51,8 @@ def pt_real_only(package):
     return sum([bool(isinstance(item, int) or isinstance(item, float)) for item in package]) == len(package)
 
 def pt_dict_only(package):
-    # package test: check only real items in package
-    return sum([bool(isinstance(item, dict) or isinstance(item, float)) for item in package]) == len(package)
+    # package test: check only dict items in package
+    return sum([isinstance(item, dict) for item in package]) == len(package)
 
 class TestRegister:
     '''
