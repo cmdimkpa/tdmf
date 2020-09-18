@@ -202,7 +202,6 @@ class TestModule(TestRegister):
 testEngine = TestModule()
 
 class Pipeline:
-    global testEngine
     '''
         Group related functions sequentially by piping the output of a preceding function
         to the input of the current function
@@ -223,9 +222,7 @@ class Pipeline:
                 pass
             functions = [primer] + self.process[1:]
             failed = False
-            last_function = None
             for function in functions:
-                last_function = function
                 testEngine.run_tests(function, curr_package)
                 if testEngine.test_status[function]["approved"]:
                     curr_package = testEngine.last_test_output
