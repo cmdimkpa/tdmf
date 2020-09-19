@@ -2,13 +2,13 @@ from distutils.core import setup
 setup(
   name = 'tdmf',
   packages = ['tdmf'],
-  version = '0.5',
+  version = '0.5.4',
   license='MIT',
   description = 'A Test-Driven Modular Application Framework for Python',
   author = 'Monty Dimkpa',
   author_email = 'cmdimkpa@gmail.com',
   url = 'https://github.com/cmdimkpa/tdmf',
-  download_url = 'https://github.com/cmdimkpa/tdmf/archive/v_05_03.tar.gz',
+  download_url = 'https://github.com/cmdimkpa/tdmf/archive/v_05_04.tar.gz',
   keywords = ['unit tests', 'package tests', 'atomic functions', 'pipelines', 'workflows', 'mutable state'],
   install_requires=[            
           
