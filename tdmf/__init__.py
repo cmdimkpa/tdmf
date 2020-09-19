@@ -17,7 +17,6 @@ else:
     slash = "/"
 TDMF_HOME += slash
 tdmf_file = TDMF_HOME + "tdmf-{}.py".format(tdmf_version)
-tdmf_components_file = TDMF_HOME + "tdmf_components.py"
 
 def get_tdmf():
     '''
@@ -49,8 +48,11 @@ def get_tdmf():
         except:
             pass
     if tdmf:
-        # add TDMF components
-        with open(tdmf_components_file, "rb") as handle:
+        # add TDMF components, pipelines and workflows
+        targets = ["components", "pipelines", "workflows"]
+        for target in targets:
+            file = TDMF_HOME + "tdmf_{}.py".format(target)
+        with open(target, "rb") as handle:
             tdmf += handle.read()
             handle.close()
     return tdmf
