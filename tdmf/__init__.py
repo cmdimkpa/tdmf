@@ -17,6 +17,7 @@ else:
     slash = "/"
 TDMF_HOME += slash
 tdmf_file = TDMF_HOME + "tdmf-{}.py".format(tdmf_version)
+tdmf_components_file = TDMF_HOME + "tdmf_components.py"
 
 def get_tdmf():
     '''
@@ -24,9 +25,9 @@ def get_tdmf():
     '''
     tdmf = None
     try:
-        with open(tdmf_file, "rb") as tdmf_handle:
-            tdmf = tdmf_handle.read()
-            tdmf_handle.close()
+        with open(tdmf_file, "rb") as handle:
+            tdmf = handle.read()
+            handle.close()
     except:
         try:
             # attempt to download the current version
@@ -34,19 +35,24 @@ def get_tdmf():
             if "404" not in tdmf_.decode():
                 tdmf = tdmf_
                 # write current version to TDMF_HOME
-                with open(tdmf_file, "wb") as tdmf_handle:
-                    tdmf_handle.write(tdmf)
-                    tdmf_handle.close()
+                with open(tdmf_file, "wb") as handle:
+                    handle.write(tdmf)
+                    handle.close()
             else:
                 # fallback to last version
                 versions = [file for file in listdir(TDMF_HOME) if isfile(join(TDMF_HOME, file)) and "tdmf-" in file]
                 versions.sort()
                 use_version = versions[-1]
-                with open(use_version, "rb") as tdmf_handle:
-                    tdmf = tdmf_handle.read()
-                    tdmf_handle.close()
+                with open(use_version, "rb") as handle:
+                    tdmf = handle.read()
+                    handle.close()
         except:
             pass
+    if tdmf:
+        # add TDMF components
+        with open(tdmf_components_file, "rb") as handle:
+            tdmf += handle.read()
+            handle.close()
     return tdmf
 
 # install and run TDMF
