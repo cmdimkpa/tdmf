@@ -166,30 +166,27 @@ class TestModule(TestRegister):
         started = now()
         for test in package_tests:
             test = "pt_{}".format(test)
-            if test in globals():
-                passed = globals()[test](package)
+            try:
+                passed = eval(test)(package)
                 if passed:
                     self.test_status[function]["package"]["passed"].append(test)
                 else:
                     self.test_status[function]["package"]["failed"].append(test)
-            else:
+            except:
                 self.test_status[function]["package"]["not_found"].append(test)
         self.test_status[function]["package"]["runtime"] = elapsed_secs(started)
 
         # run unit tests
         started = now()
         for test, test_package, test_output in unit_tests:
-            if function in globals():
-                try:
-                    if test_output == globals()[function](test_package):
-                        self.test_status[function]["unit"]["passed"].append(test)
-                        self.last_test_output = test_output
-                    else:
-                        self.test_status[function]["unit"]["failed"].append(test)
-                except:
+            try:
+                if test_output == eval(function)(test_package):
+                    self.test_status[function]["unit"]["passed"].append(test)
+                    self.last_test_output = test_output
+                else:
                     self.test_status[function]["unit"]["failed"].append(test)
-            else:
-                self.test_status[function]["unit"]["not_found"].append(test)
+            except:
+                self.test_status[function]["unit"]["failed"].append(test)
         self.test_status[function]["unit"]["runtime"] = elapsed_secs(started)
 
         # check test approval and report
@@ -202,6 +199,7 @@ class TestModule(TestRegister):
 testEngine = TestModule()
 
 class Pipeline:
+    global testEngine
     '''
         Group related functions sequentially by piping the output of a preceding function
         to the input of the current function
@@ -213,19 +211,17 @@ class Pipeline:
         self.output = None
         self.can_run = False
     def build(self):
-        global testEngine
         self.started = now()
         try:
             primer, curr_package = self.process[0]
             try:
-                curr_package = globals()[curr_package].output
+                curr_package = eval(curr_package).output
             except:
                 pass
             functions = [primer] + self.process[1:]
             failed = False
             for function in functions:
                 testEngine.run_tests(function, curr_package)
-                print(testEngine.test_status)
                 if testEngine.test_status[function]["approved"]:
                     curr_package = testEngine.last_test_output
                 else:
@@ -235,8 +231,7 @@ class Pipeline:
             if not failed:
                 self.can_run = True
                 self.run()
-        except Exception as e:
-            print(str(e))
+        except:
             print("BuildError: pipeline not properly constructed. Duration: {} secs.".format(elapsed_secs(self.started)))
     def run(self):
         self.started = now()
@@ -250,12 +245,12 @@ class Pipeline:
                 if index == 1:
                     function, curr_package = step
                     try:
-                        curr_package = globals()[curr_package].output
+                        curr_package = eval(curr_package).output
                     except:
                         pass
                 else:
                     function = step
-                curr_package = globals()[function](curr_package)
+                curr_package = eval(function)(curr_package)
                 if not curr_package:
                     no_errors = False
                     break
@@ -290,7 +285,7 @@ class Workflow:
             index = -1
             while n_executed < len(self.pipelines) and no_errors:
                 index += 1
-                curr_pipeline = globals()[self.pipelines[index]]
+                curr_pipeline = eval(self.pipelines[index])
                 curr_pipeline.build()
                 if curr_pipeline.executed:
                     n_executed += 1
