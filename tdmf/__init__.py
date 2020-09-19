@@ -52,9 +52,12 @@ def get_tdmf():
         targets = ["components", "pipelines", "workflows"]
         for target in targets:
             file = TDMF_HOME + "tdmf_{}.py".format(target)
-        with open(target, "rb") as handle:
-            tdmf += handle.read()
-            handle.close()
+            try:
+                with open(file, "rb") as handle:
+                    tdmf += handle.read()
+                    handle.close()
+            except:
+                pass
     return tdmf
 
 # install and run TDMF
