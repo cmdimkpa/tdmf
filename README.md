@@ -3,9 +3,11 @@
 # test-driven-modular-framework
 A Test Driven Modular Application Framework
 
-`pip install tdmf`
+Python - `pip install tdmf`
 
-Represent any complex application workflow (flowchart) as Python code.
+JavaScript - `npm install tdmf`
+
+Represent any complex application workflow (flowchart) as Python or JavaScript code.
 
 **building blocks**: 
 
