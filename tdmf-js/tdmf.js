@@ -182,7 +182,7 @@ class TestModule extends TestRegister {
     // run package tests
     let started = now()
     for (var i=0;i<package_tests.length;i++){
-      let test = `pt_${ package_tests[i] }`
+      let test = package_tests[i];
       try {
         let passed = eval(test)(pkg);
         if (passed){
