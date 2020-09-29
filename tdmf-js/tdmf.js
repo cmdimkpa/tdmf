@@ -23,7 +23,7 @@ class MutableState {
   }
 }
 
-flags = new MutableState();
+const _MutableState = () => new MutableState()
 
 class fetch_flag_inline {
   // dynamic flag extraction
@@ -32,6 +32,8 @@ class fetch_flag_inline {
     this.output = flags.fetch(this.item);
   }
 }
+
+const _fetch_flag_inline = (item) => new fetch_flag_inline(item)
 
 let now = () => Date.now() // get the current time
 
@@ -208,6 +210,7 @@ class TestModule extends TestRegister {
           this.test_status[fx].unit.failed.push(test)
         }
       } catch(err){
+        console.log(err)
         this.test_status[fx].unit.not_found.push(test)
       }
     }
@@ -220,8 +223,6 @@ class TestModule extends TestRegister {
     this.report(fx)
   }
 }
-
-testEngine = new TestModule()
 
 class Pipeline {
   /*
@@ -262,6 +263,7 @@ class Pipeline {
         this.run()
       }
     } catch(err){
+      console.log(err)
       console.log(`BuildError: pipeline not properly constructed. Duration: ${elapsed_secs(this.started)} secs.`)
     }
   }
@@ -301,6 +303,8 @@ class Pipeline {
     }
   }
 }
+
+const _Pipeline = (process) => new Pipeline(process)
 
 class Workflow {
   // Sequential pipeline execution model. Also supports workflow piping.
@@ -343,6 +347,8 @@ class Workflow {
   }
 }
 
+const _Workflow = (pipelines) => new Workflow(pipelines)
+
 let context_switch = (conditionals, fallback) => {
   /*
       A context switch will constrain flow routing to a function, pipeline or workflow
@@ -368,9 +374,9 @@ let context_switch = (conditionals, fallback) => {
 
 // test code to be sure this works
 
-testEngine.add_test("package", "get_sum", "number_only")
+testEngine.add_test("package", "get_sum", "pt_number_only")
 testEngine.add_test("unit", "get_sum", ["test1", [1,2,3], [6]])
-testEngine.add_test("package", "times_two", "number_only")
+testEngine.add_test("package", "times_two", "pt_number_only")
 testEngine.add_test("unit", "times_two", ["test1", [1,2,3], [2,4,6]])
 
 const get_sum = (package) => {
@@ -422,18 +428,16 @@ console.log(sample_workflow)
 
 */
 
-exports.MutableState = MutableState
-exports.flags = flags
-exports.fetch_flag_inline = fetch_flag_inline
+exports.flags = new MutableState()
+exports.testEngine =  new TestModule()
+exports.fetch_flag_inline = _fetch_flag_inline
+exports.MutableState = _MutableState
 exports.now = now
 exports.elapsed_secs = elapsed_secs
 exports.pt_string_only = pt_string_only
 exports.pt_number_only = pt_number_only
 exports.pt_object_only = pt_object_only
 exports.array_equals = array_equals,
-exports.TestRegister = TestRegister
-exports.TestModule = TestModule
-exports.testEngine = testEngine
-exports.Pipeline = Pipeline
-exports.Workflow = Workflow
+exports.Pipeline = _Pipeline
+exports.Workflow = _Workflow
 exports.context_switch = context_switch
