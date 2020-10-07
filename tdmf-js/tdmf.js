@@ -192,7 +192,7 @@ const te_run_tests = async (fx, pkg) => {
   ts.test_status[fx].unit.runtime = elapsed_secs(started)
 
   // check test approval and report
-  if (ts.test_status[fx].unit.passed.length + ts.test_status[fx].unit.not_found.length + ts.test_status[fx].package.passed.length + ts.test_status[fx].package.not_found.length === tests.unit.length + tests.package.length){
+  if (ts.test_status[fx].unit.passed.length + ts.test_status[fx].unit.not_found.length + ts.test_status[fx].package.passed.length + ts.test_status[fx].package.not_found.length === unit_tests.length + package_tests.length){
     ts.test_status[fx].approved = true;
   }
   // serialize and report
