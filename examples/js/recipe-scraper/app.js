@@ -3,7 +3,11 @@
 tdmf = require('tdmf')
 require('./components.js')
 
+// register tests
+
 tdmf.testEngine.add_test('package', 'fetch_page_content', 'pt_string_only')
+tdmf.testEngine.add_test('package', 'parse_recipe_links', 'pt_string_only')
+tdmf.testEngine.add_test('package', 'get_JSON_recipes', 'pt_string_only')
 tdmf.testEngine.add_test('unit', 'fetch_page_content', ['fetch-test', ['https://cmdimkpa.github.io/test.txt'], ['test\n'] ])
 
 // pipeline to farm recipe links from entry page
