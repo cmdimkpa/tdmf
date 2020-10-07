@@ -7,6 +7,36 @@
   Version: 0.5
 */
 
+fs = require('fs')
+
+const serialize = (handle, json) => {
+  // write data to disk
+  try {
+    file = `./${handle}`;
+    data = JSON.stringify(json);
+    fs.writeFileSync( file, data )
+  } catch(err){}
+}
+
+const deserialize = (handle) => {
+  // read data from disk
+  try {
+    file = `./${handle}`;
+    return JSON.parse( fs.readFileSync( file ) );
+  } catch(err) {
+    return undefined
+  }
+}
+
+const delete_handle = (handle) => {
+  // delete cache file
+  try {
+    file = `./${handle}`;
+    fs.unlinkSync( file )
+  } catch(err){}
+}
+
+
 class MutableState {
   /*
       Mutable state for message-passing between functions, pipelines
@@ -24,6 +54,8 @@ class MutableState {
 }
 
 const _MutableState = () => new MutableState()
+
+flags = _MutableState()
 
 class fetch_flag_inline {
   // dynamic flag extraction
@@ -55,6 +87,7 @@ let pt_object_only = (package) => {
 }
 
 const array_equals = (arr, ref_arr) => {
+  // check that two arrays are equal
   let ok = 0
   if (arr.length === ref_arr.length){
     for (var i=0;i<ref_arr.length;i++){
@@ -66,6 +99,209 @@ const array_equals = (arr, ref_arr) => {
   } else {
     return false
   }
+}
+
+const te_report = async (fx) => {
+  // test engine reporter
+  var ts = deserialize("ts"),
+      template = `
+      function: ${fx}
+
+      ---- PACKAGE TESTS ----
+
+      PASSED: ${ts.test_status[fx].package.passed.length} tests
+      FAILED: ${ts.test_status[fx].package.failed.length} tests: ${ts.test_status[fx].package.failed}
+      NOT_FOUND: ${ts.test_status[fx].package.not_found.length} tests: ${ts.test_status[fx].package.not_found}
+      duration: ${ts.test_status[fx].package.runtime} secs.
+
+      ---- UNIT TESTS ----
+
+      PASSED: ${ts.test_status[fx].unit.passed.length} tests
+      FAILED: ${ts.test_status[fx].unit.failed.length} tests: ${ts.test_status[fx].unit.failed}
+      NOT_FOUND: ${ts.test_status[fx].unit.not_found.length} tests: ${ts.test_status[fx].unit.not_found}
+      duration: ${ts.test_status[fx].unit.runtime} secs.
+
+      `
+  console.log(template)
+}
+
+const te_run_tests = async (fx, pkg) => {
+  // test engine : run tests
+  var ts = deserialize("ts") || { test_status : { }, last_test_output : null }
+
+  ts.test_status[fx] = {
+          package : {
+              passed : [],
+              failed : [],
+              not_found : [],
+              runtime : 0
+          },
+          unit : {
+              passed : [],
+              failed : [],
+              not_found : [],
+              runtime : 0
+          },
+          approved : false
+      }
+
+  var package_tests = [ ]
+  var unit_tests = [ ]
+
+  let tests = testEngine.lookup_tests(fx);
+
+  try {
+    if (tests.package){ package_tests = tests.package }
+  } catch(err){}
+  try {
+    if (tests.unit){ unit_tests = tests.unit }
+  } catch(err){}
+
+  // run package tests
+  let started = now()
+  for (var i=0;i<package_tests.length;i++){
+    let test = package_tests[i];
+    try {
+      let passed = await eval(test)(pkg);
+      if (passed){
+        ts.test_status[fx].package.passed.push(test)
+      } else {
+        ts.test_status[fx].package.failed.push(test)
+      }
+    } catch(err){
+      ts.test_status[fx].package.not_found.push(test)
+    }
+  }
+  ts.test_status[fx].package.runtime = elapsed_secs(started)
+
+  // run unit tests
+  started = now()
+  for (var i=0;i<unit_tests.length;i++){
+    let [test, test_package, test_output] = unit_tests[i]
+    try {
+      if (array_equals(test_output, await eval(fx)(test_package))){
+        ts.test_status[fx].unit.passed.push(test)
+        ts.last_test_output = test_output
+      } else {
+        ts.test_status[fx].unit.failed.push(test)
+      }
+    } catch(err){
+      ts.test_status[fx].unit.not_found.push(test)
+    }
+  }
+  ts.test_status[fx].unit.runtime = elapsed_secs(started)
+
+  // check test approval and report
+  if (ts.test_status[fx].unit.passed.length + ts.test_status[fx].unit.not_found.length + ts.test_status[fx].package.passed.length + ts.test_status[fx].package.not_found.length === tests.unit.length + tests.package.length){
+    ts.test_status[fx].approved = true;
+  }
+  // serialize and report
+  serialize('ts', ts)
+  await te_report(fx)
+}
+
+const build_pipeline = async (pipeline) => {
+  // build pipeline asynchronously
+  pipeline.started = now()
+  try {
+    let [primer, curr_package] = pipeline.process[0]
+    try {
+      let curr_package_ = eval(curr_package).output;
+      if (curr_package_){ curr_package = curr_package_ }
+    } catch(err){}
+    var functions = pipeline.process.slice(1,).reduce((a,b) => { a.push(b); return a }, [ primer ])
+    var failed = false
+    for (var i=0;i<functions.length;i++){
+      let fx = functions[i]
+      await te_run_tests(fx, curr_package)
+      if (deserialize('ts').test_status[fx].approved){
+        curr_package = deserialize('ts').last_test_output
+      } else {
+        failed = true
+        console.log(`BuildError: pipeline build failed at function: ${fx}. Duration: ${elapsed_secs(pipeline.started)} secs.`)
+        break
+      }
+    }
+    delete_handle('ts')
+    if (!failed){
+      pipeline.can_run = true;
+      pipeline = await run_pipeline(pipeline);
+    }
+  } catch(err){
+    console.log(`BuildError: pipeline not properly constructed. Duration: ${elapsed_secs(pipeline.started)} secs.`)
+  }
+  return pipeline
+}
+
+const run_pipeline = async (pipeline) => {
+  // run pipeline asynchronously
+  pipeline.started = now()
+  if (pipeline.can_run){
+    var curr_package,
+        curr_package_,
+        fx,
+        no_errors = true
+    for (var index=0;index<pipeline.process.length;index++){
+      let step = pipeline.process[index];
+      if (index === 0){
+        [fx, curr_package] = step
+        try {
+          curr_package_ = eval(curr_package).output;
+          if (curr_package_){ curr_package = curr_package_ }
+        } catch(err){ }
+      } else {
+        fx = step
+      }
+      curr_package = await eval(fx)(curr_package);
+      if (!curr_package){
+        no_errors = false
+        break
+      }
+    }
+    if (no_errors){
+      pipeline.output = curr_package
+      pipeline.executed = true
+      pipeline.can_run = false
+      console.log(`Pipeline executed successfully (check trace for function-specific errors). Duration: ${elapsed_secs(pipeline.started)} secs.`)
+    }
+  } else {
+    console.log(`RuntimeError: please build this pipeline first. Duration: ${elapsed_secs(pipeline.started)} secs.`)
+  }
+  return pipeline
+}
+
+const run_workflow = async (workflow) => {
+  // run workflow asynchronously
+  if (workflow.pipelines){
+    workflow.started = now()
+    var n_executed = 0,
+        no_errors = true,
+        curr_pipeline = null,
+        index = -1
+    while ( n_executed < workflow.pipelines.length && no_errors ){
+      index++;
+      curr_pipeline = eval(workflow.pipelines[index]);
+      curr_pipeline = await build_pipeline(curr_pipeline);
+      if (curr_pipeline.executed){
+        n_executed++
+      } else {
+        no_errors = false
+      }
+    }
+    if (no_errors){
+      console.log(`Workflow executed successfully in ${elapsed_secs(workflow.started)} secs.`)
+      workflow.output = curr_pipeline.output
+      workflow.executed = true
+    } else {
+      console.log(`Workflow halted due to failed pipeline: ${workflow.pipelines[index]} (${index+1} of ${workflow.pipelines.length}). Duration: ${elapsed_secs(workflow.started)} secs.`)
+    }
+  }
+  return workflow
+}
+
+const build_workflow = async (workflow) => {
+  // build workflow asynchronously
+  return await run_workflow(workflow)
 }
 
 class TestRegister {
@@ -124,105 +360,13 @@ class TestRegister {
 }
 
 class TestModule extends TestRegister {
+  // new Test Module (Test Register)
   constructor (){
     super()
-    this.test_status = { }
-    this.last_test_output = null
-  }
-
-  report (fx) {
-    var template = `
-        function: ${fx}
-
-        ---- PACKAGE TESTS ----
-
-        PASSED: ${this.test_status[fx].package.passed.length} tests
-        FAILED: ${this.test_status[fx].package.failed.length} tests: ${this.test_status[fx].package.failed}
-        NOT_FOUND: ${this.test_status[fx].package.not_found.length} tests: ${this.test_status[fx].package.not_found}
-        duration: ${this.test_status[fx].package.runtime} secs.
-
-        ---- UNIT TESTS ----
-
-        PASSED: ${this.test_status[fx].unit.passed.length} tests
-        FAILED: ${this.test_status[fx].unit.failed.length} tests: ${this.test_status[fx].unit.failed}
-        NOT_FOUND: ${this.test_status[fx].unit.not_found.length} tests: ${this.test_status[fx].unit.not_found}
-        duration: ${this.test_status[fx].unit.runtime} secs.
-
-        `
-    console.log(template)
-  }
-
-  run_tests (fx, pkg){
-    this.test_status[fx] = {
-            package : {
-                passed : [],
-                failed : [],
-                not_found : [],
-                runtime : 0
-            },
-            unit : {
-                passed : [],
-                failed : [],
-                not_found : [],
-                runtime : 0
-            },
-            approved : false
-        }
-
-    var package_tests = [ ]
-    var unit_tests = [ ]
-
-    let tests = this.lookup_tests(fx);
-
-    try {
-      if (tests.package){ package_tests = tests.package }
-    } catch(err){}
-    try {
-      if (tests.unit){ unit_tests = tests.unit }
-    } catch(err){}
-
-    // run package tests
-    let started = now()
-    for (var i=0;i<package_tests.length;i++){
-      let test = package_tests[i];
-      try {
-        let passed = eval(test)(pkg);
-        if (passed){
-          this.test_status[fx].package.passed.push(test)
-        } else {
-          this.test_status[fx].package.failed.push(test)
-        }
-      } catch(err){
-        this.test_status[fx].package.not_found.push(test)
-      }
-    }
-    this.test_status[fx].package.runtime = elapsed_secs(started)
-
-    // run unit tests
-    started = now()
-    for (var i=0;i<unit_tests.length;i++){
-      let [test, test_package, test_output] = unit_tests[i]
-      try {
-        if (array_equals(test_output, eval(fx)(test_package))){
-          this.test_status[fx].unit.passed.push(test)
-          this.last_test_output = test_output
-        } else {
-          this.test_status[fx].unit.failed.push(test)
-        }
-      } catch(err){
-        console.log(err)
-        this.test_status[fx].unit.not_found.push(test)
-      }
-    }
-    this.test_status[fx].unit.runtime = elapsed_secs(started)
-
-    // check test approval and report
-    if (this.test_status[fx].unit.passed.length + this.test_status[fx].unit.not_found.length + this.test_status[fx].package.passed.length + this.test_status[fx].package.not_found.length === tests.unit.length + tests.package.length){
-      this.test_status[fx].approved = true;
-    }
-    this.report(fx)
   }
 }
+
+testEngine = new TestModule() // Internal Test Module
 
 class Pipeline {
   /*
@@ -237,71 +381,6 @@ class Pipeline {
     this.can_run = false
   }
 
-  build (){
-    this.started = now()
-    try {
-      let [primer, curr_package] = this.process[0]
-      try {
-        let curr_package_ = eval(curr_package).output;
-        if (curr_package_){ curr_package = curr_package_ }
-      } catch(err){}
-      var functions = this.process.slice(1,).reduce((a,b) => { a.push(b); return a }, [ primer ])
-      var failed = false
-      for (var i=0;i<functions.length;i++){
-        let fx = functions[i]
-        testEngine.run_tests(fx, curr_package)
-        if (testEngine.test_status[fx].approved){
-          curr_package = testEngine.last_test_output
-        } else {
-          failed = true
-          console.log(`BuildError: pipeline build failed at function: ${fx}. Duration: ${elapsed_secs(this.started)} secs.`)
-          break
-        }
-      }
-      if (!failed){
-        this.can_run = true;
-        this.run()
-      }
-    } catch(err){
-      console.log(err)
-      console.log(`BuildError: pipeline not properly constructed. Duration: ${elapsed_secs(this.started)} secs.`)
-    }
-  }
-
-  run (){
-    this.started = now()
-    if (this.can_run){
-      var curr_package,
-          curr_package_,
-          fx,
-          no_errors = true
-      for (var index=0;index<this.process.length;index++){
-        let step = this.process[index];
-        if (index === 0){
-          [fx, curr_package] = step
-          try {
-            curr_package_ = eval(curr_package).output;
-            if (curr_package_){ curr_package = curr_package_ }
-          } catch(err){ }
-        } else {
-          fx = step
-        }
-        curr_package = eval(fx)(curr_package);
-        if (!curr_package){
-          no_errors = false
-          break
-        }
-      }
-      if (no_errors){
-        this.output = curr_package
-        this.executed = true
-        this.can_run = false
-        console.log(`Pipeline executed successfully (check trace for function-specific errors). Duration: ${elapsed_secs(this.started)} secs.`)
-      }
-    } else {
-      console.log(`RuntimeError: please build this pipeline first. Duration: ${elapsed_secs(this.started)} secs.`)
-    }
-  }
 }
 
 const _Pipeline = (process) => new Pipeline(process)
@@ -313,37 +392,6 @@ class Workflow {
     this.output = null
     this.executed = false
     this.started = null
-  }
-
-  build (){
-    this.run()
-  }
-
-  run() {
-    if (this.pipelines){
-      this.started = now()
-      var n_executed = 0,
-          no_errors = true,
-          curr_pipeline = null,
-          index = -1
-      while ( n_executed < this.pipelines.length && no_errors ){
-        index++;
-        curr_pipeline = eval(this.pipelines[index]);
-        curr_pipeline.build()
-        if (curr_pipeline.executed){
-          n_executed++
-        } else {
-          no_errors = false
-        }
-      }
-      if (no_errors){
-        console.log(`Workflow executed successfully in ${elapsed_secs(this.started)} secs.`)
-        this.output = curr_pipeline.output
-        this.executed = true
-      } else {
-        console.log(`Workflow halted due to failed pipeline: ${this.pipelines[index]} (${index+1} of ${this.pipelines.length}). Duration: ${elapsed_secs(this.started)} secs.`)
-      }
-    }
   }
 }
 
@@ -370,66 +418,8 @@ let context_switch = (conditionals, fallback) => {
   }
 }
 
-/*
-
-// test code to be sure this works
-
-testEngine.add_test("package", "get_sum", "pt_number_only")
-testEngine.add_test("unit", "get_sum", ["test1", [1,2,3], [6]])
-testEngine.add_test("package", "times_two", "pt_number_only")
-testEngine.add_test("unit", "times_two", ["test1", [1,2,3], [2,4,6]])
-
-const get_sum = (package) => {
-  output = []
-  try {
-    output = [ package.reduce((a,b) => a+b, 0) ]
-  } catch(err){
-    console.log(err)
-  }
-  return output
-}
-
-const times_two = (package) => {
-  output = []
-  try {
-    output = package.map(x => x*2)
-    times_two_output = flags.fetch("times_two_output")
-    if (times_two_output){
-      times_two_output = output.reduce((a,b) => { a.push(b); return a }, times_two_output)
-    } else {
-      times_two_output = output
-    }
-    flags.update("times_two_output", times_two_output)
-  } catch(err){
-    console.log(err)
-  }
-  return output
-}
-
-let sample_pipeline = new Pipeline([
-    ["get_sum", [1,2.44,3]],
-    "times_two"
-])
-
-sample_pipeline2 = new Pipeline([
-    ["get_sum", "new fetch_flag_inline('times_two_output')"],
-    context_switch([
-        [flags.fetch("times_two_output")> 0, "get_sum"],
-    ], "times_two")
-])
-
-sample_workflow = new Workflow([
-   "sample_pipeline",
-   "sample_pipeline2"
-])
-
-sample_workflow.run()
-console.log(sample_workflow)
-
-*/
-
-exports.flags = new MutableState()
-exports.testEngine =  new TestModule()
+exports.flags = flags
+exports.testEngine =  testEngine
 exports.fetch_flag_inline = _fetch_flag_inline
 exports.MutableState = _MutableState
 exports.now = now
@@ -441,3 +431,10 @@ exports.array_equals = array_equals,
 exports.Pipeline = _Pipeline
 exports.Workflow = _Workflow
 exports.context_switch = context_switch
+exports.build_pipeline = build_pipeline
+exports.run_pipeline = run_pipeline
+exports.build_workflow = build_workflow
+exports.run_workflow = run_workflow
+exports.serialize = serialize
+exports.deserialize = deserialize
+exports.delete_handle = delete_handle
