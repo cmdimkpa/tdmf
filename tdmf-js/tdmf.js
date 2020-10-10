@@ -4,7 +4,7 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5
+  Version: 0.5.33
 */
 
 fs = require('fs')
@@ -281,7 +281,7 @@ const run_workflow = async (workflow) => {
     while ( n_executed < workflow.pipelines.length && no_errors ){
       index++;
       curr_pipeline = eval(workflow.pipelines[index]);
-      curr_pipeline = await build_pipeline(curr_pipeline);
+      curr_pipeline = curr_pipeline.pipelines ? await run_workflow(curr_pipeline) : await build_pipeline(curr_pipeline);
       if (curr_pipeline.executed){
         n_executed++
       } else {
