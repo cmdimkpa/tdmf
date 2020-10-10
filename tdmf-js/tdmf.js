@@ -4,7 +4,7 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5.33
+  Version: 0.5.34
 */
 
 fs = require('fs')
@@ -122,7 +122,9 @@ const te_report = async (fx) => {
       duration: ${ts.test_status[fx].unit.runtime} secs.
 
       `
-  console.log(template)
+  if (testEngine.options.verbose){
+    console.log(template)
+  }
 }
 
 const te_run_tests = async (fx, pkg) => {
@@ -363,6 +365,7 @@ class TestModule extends TestRegister {
   // new Test Module (Test Register)
   constructor (){
     super()
+    this.options = { verbose : true }
   }
 }
 
