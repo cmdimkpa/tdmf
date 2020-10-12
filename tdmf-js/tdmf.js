@@ -4,38 +4,70 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5.34
+  Version: 0.5.35
 */
 
 fs = require('fs')
 
-const serialize = (handle, json) => {
+const serialize = (handle, json, path = '.', debug = false) => {
   // write data to disk
   try {
-    file = `./${handle}`;
+    file = `${path}${process.cwd().indexOf('\\') !== -1 ? '\\' : '/'}${handle}`;
     data = JSON.stringify(json);
     fs.writeFileSync( file, data )
-  } catch(err){}
+  } catch(err){
+    if (debug){ console.log(err) }
+  }
 }
 
-const deserialize = (handle) => {
+const deserialize = (handle, path = '.', debug = false) => {
   // read data from disk
   try {
-    file = `./${handle}`;
+    file = `${path}${process.cwd().indexOf('\\') !== -1 ? '\\' : '/'}${handle}`;
     return JSON.parse( fs.readFileSync( file ) );
   } catch(err) {
+    if (debug){ console.log(err) }
     return undefined
   }
 }
 
-const delete_handle = (handle) => {
+const delete_handle = (handle, path = '.') => {
   // delete cache file
   try {
-    file = `./${handle}`;
+    file = `${path}${process.cwd().indexOf('\\') !== -1 ? '\\' : '/'}${handle}`;
     fs.unlinkSync( file )
   } catch(err){}
 }
 
+class diskData {
+  constructor (path=null, debug=true){
+    this.slash = process.cwd().indexOf('\\') !== -1 ? '\\' : '/'
+    this.path = `${process.cwd()}${this.slash}node_modules${this.slash}tdmf${this.slash}env` || path
+    if (!fs.existsSync(this.path)){ fs.mkdirSync(this.path);}
+    this.id = Math.random()
+    this.options = { debug : debug }
+    this.handles = [ ]
+  }
+  update (handle, data){
+    if (this.handles.indexOf(handle) === -1){ this.handles.push(handle) }
+    serialize(`${handle}${this.id}`, data, this.path, this.options.debug)
+  }
+  fetch (handle){
+    return deserialize(`${handle}${this.id}`, this.path, this.options.debug)
+  }
+  delete (handle){
+    delete_handle(`${handle}${this.id}`, this.path)
+  }
+  deleteAll (){
+    this.handles.forEach((handle) => {
+      this.delete(handle)
+    })
+  }
+}
+
+const _diskData = () => new diskData()
+
+env = _diskData() // internal environment variables
 
 class MutableState {
   /*
@@ -103,7 +135,7 @@ const array_equals = (arr, ref_arr) => {
 
 const te_report = async (fx) => {
   // test engine reporter
-  var ts = deserialize("ts"),
+  var ts = env.fetch('ts'),
       template = `
       function: ${fx}
 
@@ -129,7 +161,7 @@ const te_report = async (fx) => {
 
 const te_run_tests = async (fx, pkg) => {
   // test engine : run tests
-  var ts = deserialize("ts") || { test_status : { }, last_test_output : null }
+  var ts = env.fetch('ts') || { test_status : { }, last_test_output : null }
 
   ts.test_status[fx] = {
           package : {
@@ -198,7 +230,7 @@ const te_run_tests = async (fx, pkg) => {
     ts.test_status[fx].approved = true;
   }
   // serialize and report
-  serialize('ts', ts)
+  env.update('ts', ts)
   await te_report(fx)
 }
 
@@ -216,20 +248,22 @@ const build_pipeline = async (pipeline) => {
     for (var i=0;i<functions.length;i++){
       let fx = functions[i]
       await te_run_tests(fx, curr_package)
-      if (deserialize('ts').test_status[fx].approved){
-        curr_package = deserialize('ts').last_test_output
+      if (env.fetch('ts').test_status[fx].approved){
+        curr_package = env.fetch('ts').last_test_output
       } else {
         failed = true
         console.log(`BuildError: pipeline build failed at function: ${fx}. Duration: ${elapsed_secs(pipeline.started)} secs.`)
         break
       }
     }
-    delete_handle('ts')
     if (!failed){
       pipeline.can_run = true;
       pipeline = await run_pipeline(pipeline);
     }
   } catch(err){
+    if (pipeline.options.debug){
+      console.log(err)
+    }
     console.log(`BuildError: pipeline not properly constructed. Duration: ${elapsed_secs(pipeline.started)} secs.`)
   }
   return pipeline
@@ -382,6 +416,7 @@ class Pipeline {
     this.started = null
     this.output = null
     this.can_run = false
+    this.options = { debug : false }
   }
 
 }
@@ -409,6 +444,7 @@ let context_switch = (conditionals, fallback) => {
   selected = null
   for (var i=0;i<conditionals;i++){
     let [flag_boolean, object_name] = conditionals[i]
+    console.log(flag_boolean, object_name)
     if (flag_boolean){
       selected = object_name
       break
@@ -425,6 +461,8 @@ exports.flags = flags
 exports.testEngine =  testEngine
 exports.fetch_flag_inline = _fetch_flag_inline
 exports.MutableState = _MutableState
+exports.diskData = _diskData
+exports.env = env
 exports.now = now
 exports.elapsed_secs = elapsed_secs
 exports.pt_string_only = pt_string_only
