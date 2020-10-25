@@ -4,7 +4,7 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5.35
+  Version: 0.5.36
 */
 
 fs = require('fs')
@@ -42,7 +42,7 @@ const delete_handle = (handle, path = '.') => {
 class diskData {
   constructor (path=null, debug=true){
     this.slash = process.cwd().indexOf('\\') !== -1 ? '\\' : '/'
-    this.path = `${process.cwd()}${this.slash}node_modules${this.slash}tdmf${this.slash}env` || path
+    this.path = `${process.cwd()}${this.slash}env` || path
     if (!fs.existsSync(this.path)){ fs.mkdirSync(this.path);}
     this.id = Math.random()
     this.options = { debug : debug }
@@ -247,9 +247,9 @@ const build_pipeline = async (pipeline) => {
     var failed = false
     for (var i=0;i<functions.length;i++){
       let fx = functions[i]
-      await te_run_tests(fx, curr_package)
-      if (env.fetch('ts').test_status[fx].approved){
-        curr_package = env.fetch('ts').last_test_output
+      if (pipeline.options.run_tests){ await te_run_tests(fx, curr_package) }
+      if (pipeline.options.run_tests ? env.fetch('ts').test_status[fx].approved : true){
+        curr_package = pipeline.options.run_tests ? env.fetch('ts').last_test_output : await eval(fx)(curr_package)
       } else {
         failed = true
         console.log(`BuildError: pipeline build failed at function: ${fx}. Duration: ${elapsed_secs(pipeline.started)} secs.`)
@@ -257,51 +257,16 @@ const build_pipeline = async (pipeline) => {
       }
     }
     if (!failed){
-      pipeline.can_run = true;
-      pipeline = await run_pipeline(pipeline);
+      pipeline.output = curr_package
+      pipeline.executed = true
+      pipeline.can_run = false
+      console.log(`Pipeline executed successfully (check trace for function-specific errors). Duration: ${elapsed_secs(pipeline.started)} secs.`)
     }
   } catch(err){
     if (pipeline.options.debug){
       console.log(err)
     }
     console.log(`BuildError: pipeline not properly constructed. Duration: ${elapsed_secs(pipeline.started)} secs.`)
-  }
-  return pipeline
-}
-
-const run_pipeline = async (pipeline) => {
-  // run pipeline asynchronously
-  pipeline.started = now()
-  if (pipeline.can_run){
-    var curr_package,
-        curr_package_,
-        fx,
-        no_errors = true
-    for (var index=0;index<pipeline.process.length;index++){
-      let step = pipeline.process[index];
-      if (index === 0){
-        [fx, curr_package] = step
-        try {
-          curr_package_ = eval(curr_package).output;
-          if (curr_package_){ curr_package = curr_package_ }
-        } catch(err){ }
-      } else {
-        fx = step
-      }
-      curr_package = await eval(fx)(curr_package);
-      if (!curr_package){
-        no_errors = false
-        break
-      }
-    }
-    if (no_errors){
-      pipeline.output = curr_package
-      pipeline.executed = true
-      pipeline.can_run = false
-      console.log(`Pipeline executed successfully (check trace for function-specific errors). Duration: ${elapsed_secs(pipeline.started)} secs.`)
-    }
-  } else {
-    console.log(`RuntimeError: please build this pipeline first. Duration: ${elapsed_secs(pipeline.started)} secs.`)
   }
   return pipeline
 }
@@ -416,7 +381,7 @@ class Pipeline {
     this.started = null
     this.output = null
     this.can_run = false
-    this.options = { debug : false }
+    this.options = { debug : false, run_tests : true }
   }
 
 }
@@ -473,7 +438,6 @@ exports.Pipeline = _Pipeline
 exports.Workflow = _Workflow
 exports.context_switch = context_switch
 exports.build_pipeline = build_pipeline
-exports.run_pipeline = run_pipeline
 exports.build_workflow = build_workflow
 exports.run_workflow = run_workflow
 exports.serialize = serialize
