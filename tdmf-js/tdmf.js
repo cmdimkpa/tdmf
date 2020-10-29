@@ -4,7 +4,7 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5.41
+  Version: 0.5.42
 */
 
 fs = require('fs')
@@ -418,8 +418,13 @@ let context_switch = (conditionals, fallback) => {
   */
   selected = null
   for (var i=0;i<conditionals;i++){
-    let [flag_boolean, object_name] = conditionals[i]
-    console.log(flag_boolean, object_name)
+    let [flag_boolean_expr, object_name] = conditionals[i]
+    var flag_boolean;
+    try {
+      flag_boolean = eval(flag_boolean_expr)
+    } catch(err){
+      flag_boolean = flag_boolean_expr
+    }
     if (flag_boolean){
       selected = object_name
       break
