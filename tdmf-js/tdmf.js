@@ -4,7 +4,7 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5.42
+  Version: 0.5.43
 */
 
 fs = require('fs')
@@ -257,6 +257,9 @@ const build_pipeline = async (pipeline) => {
     var failed = false
     for (var i=0;i<functions.length;i++){
       let fx = functions[i]
+      if (fx.indexOf("context_switch(") !== -1){
+        fx = eval(fx);
+      }
       if (pipeline.options.run_tests){ await te_run_tests(fx, curr_package) }
       if (pipeline.options.run_tests ? env.fetch('ts').test_status[fx].approved : true){
         curr_package = pipeline.options.run_tests ? env.fetch('ts').last_test_output : await eval(fx)(curr_package)
