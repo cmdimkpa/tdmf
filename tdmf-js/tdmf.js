@@ -4,7 +4,7 @@
   building blocks: unit_tests, package_tests, test modules, test_driven atomic functions, pipelines,
   workflows, context switches and flags (global mutable state) based routing
 
-  Version: 0.5.36
+  Version: 0.5.41
 */
 
 fs = require('fs')
@@ -98,6 +98,16 @@ class fetch_flag_inline {
 }
 
 const _fetch_flag_inline = (item) => new fetch_flag_inline(item)
+
+class fetch_env_inline {
+  // dynamic flag extraction
+  constructor (item){
+    this.item = item;
+    this.output = env.fetch(this.item);
+  }
+}
+
+const _fetch_env_inline = (item) => new fetch_env_inline(item)
 
 let now = () => Date.now() // get the current time
 
@@ -425,6 +435,7 @@ let context_switch = (conditionals, fallback) => {
 exports.flags = flags
 exports.testEngine =  testEngine
 exports.fetch_flag_inline = _fetch_flag_inline
+exports.fetch_env_inline = _fetch_env_inline
 exports.MutableState = _MutableState
 exports.diskData = _diskData
 exports.env = env
